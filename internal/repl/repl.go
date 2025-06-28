@@ -1,30 +1,26 @@
-package main
+package repl
 
 import (
 	"bufio"
 	"fmt"
 	"os"
 	"strings"
+	"time"
+
+	"github.com/xuaspick/pokedexgo/internal/pokeapi"
 )
 
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*config) error
-}
-
-type config struct {
-	previousUrl string
-	nextUrl     string
+	callback    func(*pokeapi.Client) error
 }
 
 func StartRepl() {
 	scanner := bufio.NewScanner(os.Stdin)
 	supportedCommands := getCommands()
 
-	cfg := config{
-		nextUrl: "https://pokeapi.co/api/v2/location-area/",
-	}
+	pokeClient := pokeapi.NewClient(5 * time.Second)
 
 	for {
 		fmt.Print("Pokedex > ")
@@ -40,7 +36,7 @@ func StartRepl() {
 			continue
 		}
 
-		if err := supportedCommands[promptCommand].callback(&cfg); err != nil {
+		if err := supportedCommands[promptCommand].callback(pokeClient); err != nil {
 			fmt.Printf("Error executing command '%s': %v\n", promptCommand, err)
 			continue
 		}
@@ -54,13 +50,13 @@ func cleanInput(text string) []string {
 	return slicedString
 }
 
-func commandExit(c *config) error {
+func commandExit(cli *pokeapi.Client) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(c *config) error {
+func commandHelp(cli *pokeapi.Client) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Print("Usage:\n\n")
 	for _, data := range getCommands() {
@@ -69,8 +65,8 @@ func commandHelp(c *config) error {
 	return nil
 }
 
-func commandMap(c *config) error {
-	locAreas, err := GetLocationAreas("forward", c)
+func commandMap(cli *pokeapi.Client) error {
+	locAreas, err := cli.GetLocationAreas("forward")
 	if err != nil {
 		return err
 	}
@@ -80,16 +76,12 @@ func commandMap(c *config) error {
 	return nil
 }
 
-func commandMapb(c *config) error {
-	if c.previousUrl == "" {
-		fmt.Println("you're on the first page")
-		return nil
-	}
-
-	locAreas, err := GetLocationAreas("back", c)
+func commandMapb(cli *pokeapi.Client) error {
+	locAreas, err := cli.GetLocationAreas("back")
 	if err != nil {
 		return err
 	}
+
 	for _, l := range locAreas {
 		fmt.Println(l.Name)
 	}
