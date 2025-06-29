@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -57,10 +58,18 @@ func commandExit(cli *pokeapi.Client, args ...string) error {
 }
 
 func commandHelp(cli *pokeapi.Client, args ...string) error {
+	commands := getCommands()
+	names := make([]string, 0, len(commands))
+
+	for name := range commands {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Print("Usage:\n\n")
-	for _, data := range getCommands() {
-		fmt.Printf("%s: %s\n", data.name, data.description)
+	for _, name := range names {
+		fmt.Printf("%s: %s\n", name, commands[name].description)
 	}
 	return nil
 }
@@ -115,13 +124,23 @@ func commandCatch(cli *pokeapi.Client, args ...string) error {
 	return nil
 }
 
+func commandInspect(cli *pokeapi.Client, args ...string) error {
+	if len(args) == 0 {
+		fmt.Println("A Pokemon name must be provided to display data")
+		return nil
+	}
+
+	cli.InspectPokemon(args[0])
+	return nil
+}
+
+func commandPokedex(cli *pokeapi.Client, args ...string) error {
+	err := cli.ListCaughtPokemon()
+	return err
+}
+
 func getCommands() map[string]cliCommand {
 	return map[string]cliCommand{
-		"help": {
-			name:        "help",
-			description: "Displays a help message",
-			callback:    commandHelp,
-		},
 		"catch": {
 			name:        "catch <pokemon_name>",
 			description: "Attepmts to catch a pokemon",
@@ -137,6 +156,16 @@ func getCommands() map[string]cliCommand {
 			description: "Shows the pokemon in the indicated location",
 			callback:    commandExplore,
 		},
+		"help": {
+			name:        "help",
+			description: "Displays a help message",
+			callback:    commandHelp,
+		},
+		"inspect": {
+			name:        "inspect <pokemon_name>",
+			description: "Shows the data of a captured pokemon",
+			callback:    commandInspect,
+		},
 		"map": {
 			name:        "map",
 			description: "displays the names of 20 location areas in the Pokemon world",
@@ -146,6 +175,11 @@ func getCommands() map[string]cliCommand {
 			name:        "mapb",
 			description: "displays the names of the previous 20 location areas in the pokemon world",
 			callback:    commandMapb,
+		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "shows a list of all caught pokemon",
+			callback:    commandPokedex,
 		},
 	}
 }

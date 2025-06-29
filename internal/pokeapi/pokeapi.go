@@ -33,6 +33,19 @@ type resPokemonPerArea struct {
 type Pokemon struct {
 	Name    string `json:"name"`
 	BaseExp int    `json:"base_experience"`
+	Height  int    `json:"height"`
+	Weight  int    `json:"weight"`
+	Stats   []struct {
+		BaseStat int `json:"base_stat"`
+		Stat     struct {
+			Name string `json:"name"`
+		} `json:"stat"`
+	} `json:"stats"`
+	Types []struct {
+		Type struct {
+			Name string `json:"name"`
+		} `json:"type"`
+	} `json:"types"`
 }
 
 type Client struct {
@@ -47,9 +60,7 @@ type Config struct {
 }
 
 const (
-	highestPokemonBaseExp = 608
-	lowestPokemonBaseExp  = 39
-	thresholdToCatch      = 15
+	thresholdToCatch = 30
 )
 
 func NewClient(cacheInterval time.Duration) *Client {
@@ -175,4 +186,38 @@ func (cli *Client) CatchPokemon(pokemonName string, testMode ...int) (captured b
 	fmt.Printf("%s was caught!\n", pokemonName)
 
 	return true, nil
+}
+
+func (cli *Client) InspectPokemon(pokemonName string) error {
+	pokemon, ok := cli.Pokedex[pokemonName]
+	if !ok {
+		fmt.Println("you have not caught that pokemon")
+		return nil
+	}
+
+	fmt.Printf("Name: %s\n", pokemon.Name)
+	fmt.Printf("Height: %v\n", pokemon.Height)
+	fmt.Printf("Weight: %v\n", pokemon.Weight)
+	fmt.Println("Stats:")
+	for _, s := range pokemon.Stats {
+		fmt.Printf("  -%s: %v\n", s.Stat.Name, s.BaseStat)
+	}
+	fmt.Println("Types:")
+	for _, t := range pokemon.Types {
+		fmt.Printf("  -%s\n", t.Type.Name)
+	}
+	return nil
+}
+
+func (cli *Client) ListCaughtPokemon() error {
+	if len(cli.Pokedex) == 0 {
+		fmt.Println("No pokemon caught, go catch 'em all!")
+		return nil
+	}
+
+	fmt.Println("Your pokedex:")
+	for _, pokemon := range cli.Pokedex {
+		fmt.Printf(" - %s \n", pokemon.Name)
+	}
+	return nil
 }
