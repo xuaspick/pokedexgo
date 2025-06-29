@@ -1,7 +1,6 @@
 package pokecache
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -32,7 +31,7 @@ func (c Cache) Add(key string, val []byte) {
 		val:       val,
 		createdAt: time.Now(),
 	}
-	fmt.Printf(">>> added Cache for url: %s\n", key)
+	// fmt.Printf(">>> added Cache for url: %s\n", key)
 }
 
 func (c Cache) Get(key string) ([]byte, bool) {
@@ -42,7 +41,7 @@ func (c Cache) Get(key string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
-	fmt.Printf(">>> returnin cache for url: %s\n", key)
+	// fmt.Printf(">>> returnin cache for url: %s\n", key)
 	return cEnt.val, true
 }
 

@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 
 	"github.com/xuaspick/pokedexgo/internal/pokecache"
 )
 
-type reslocationArea struct {
-	Count    int            `json:"count"`
+type resLocationArea struct {
 	Next     string         `json:"next"`
 	Previous *string        `json:"previous"`
 	Results  []locationArea `json:"results"`
@@ -22,15 +22,35 @@ type locationArea struct {
 	Url  string `json:"url"`
 }
 
+type resPokemonPerArea struct {
+	PokemonEncounters []struct {
+		Pokemon struct {
+			Name string `json:"name"`
+		} `json:"pokemon"`
+	} `json:"pokemon_encounters"`
+}
+
+type Pokemon struct {
+	Name    string `json:"name"`
+	BaseExp int    `json:"base_experience"`
+}
+
+type Client struct {
+	cache   *pokecache.Cache
+	Config  Config
+	Pokedex map[string]Pokemon
+}
+
 type Config struct {
 	NextUrl     string
 	PreviousUrl string
 }
 
-type Client struct {
-	cache  *pokecache.Cache
-	Config Config
-}
+const (
+	highestPokemonBaseExp = 608
+	lowestPokemonBaseExp  = 39
+	thresholdToCatch      = 15
+)
 
 func NewClient(cacheInterval time.Duration) *Client {
 	return &Client{
@@ -38,11 +58,32 @@ func NewClient(cacheInterval time.Duration) *Client {
 		Config: Config{
 			NextUrl: "https://pokeapi.co/api/v2/location-area/?offset=0&limit=20",
 		},
+		Pokedex: map[string]Pokemon{},
 	}
 }
 
+func (cli *Client) processRequest(url string) (httpBody []byte, err error) {
+	var httpReadBody []byte
+	if cached, ok := cli.cache.Get(url); ok {
+		return cached, nil
+	}
+	res, err := http.Get(url)
+	if err != nil {
+		return httpReadBody, err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return httpReadBody, err
+	}
+	cli.cache.Add(url, body)
+	return body, nil
+
+}
+
 func (cli *Client) GetLocationAreas(direction string) ([]locationArea, error) {
-	resp := reslocationArea{}
+	resp := resLocationArea{}
 	var url string
 
 	if direction == "forward" {
@@ -56,28 +97,13 @@ func (cli *Client) GetLocationAreas(direction string) ([]locationArea, error) {
 		return resp.Results, nil
 	}
 
-	if cached, ok := cli.cache.Get(url); ok {
-		err := json.Unmarshal(cached, &resp)
-		if err != nil {
-			return resp.Results, err
-		}
-	} else {
-		res, err := http.Get(url)
-		if err != nil {
-			return resp.Results, err
-		}
-		defer res.Body.Close()
-
-		body, err := io.ReadAll(res.Body)
-		if err != nil {
-			return resp.Results, err
-		}
-		cli.cache.Add(url, body)
-
-		err = json.Unmarshal(body, &resp)
-		if err != nil {
-			return resp.Results, err
-		}
+	body, err := cli.processRequest(url)
+	if err != nil {
+		return resp.Results, err
+	}
+	err = json.Unmarshal(body, &resp)
+	if err != nil {
+		return resp.Results, err
 	}
 
 	cli.Config.NextUrl = resp.Next
@@ -89,4 +115,64 @@ func (cli *Client) GetLocationAreas(direction string) ([]locationArea, error) {
 
 	return resp.Results, nil
 
+}
+
+func (cli *Client) GetPokemonInArea(cityName string) (pokemonNames []string, err error) {
+	var pokemonFound []string
+	pokeFound := resPokemonPerArea{}
+	url := "https://pokeapi.co/api/v2/location-area/" + cityName
+	body, err := cli.processRequest(url)
+
+	if err != nil {
+		return pokemonFound, err
+	}
+	err = json.Unmarshal(body, &pokeFound)
+	if err != nil {
+		return pokemonFound, err
+	}
+	for _, encounter := range pokeFound.PokemonEncounters {
+		pokemonFound = append(pokemonFound, encounter.Pokemon.Name)
+	}
+
+	return pokemonFound, nil
+}
+
+func (cli *Client) CatchPokemon(pokemonName string, testMode ...int) (captured bool, err error) {
+	var pokemonData Pokemon
+	if pokemonName == "" {
+		return false, nil
+	}
+	url := "https://pokeapi.co/api/v2/pokemon/" + pokemonName
+
+	body, err := cli.processRequest(url)
+	if err != nil {
+		return false, nil
+	}
+	err = json.Unmarshal(body, &pokemonData)
+	if err != nil {
+		return false, nil
+	}
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemonName)
+	leTime := time.Now().UnixNano()
+	r := rand.New(rand.NewSource(leTime))
+
+	var capturePoints int
+	if len(testMode) > 0 {
+		capturePoints = pokemonData.BaseExp
+	} else {
+		capturePoints = r.Intn(pokemonData.BaseExp)
+	}
+	basePoints := pokemonData.BaseExp - thresholdToCatch
+
+	// fmt.Printf("attemptin capture, BasePoints: %v <= CapturePoints: %v\n", basePoints, capturePoints)
+
+	if basePoints > capturePoints {
+		fmt.Printf("%s escaped!\n", pokemonName)
+		return false, nil
+	}
+
+	cli.Pokedex[pokemonName] = pokemonData
+	fmt.Printf("%s was caught!\n", pokemonName)
+
+	return true, nil
 }

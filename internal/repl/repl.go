@@ -13,7 +13,7 @@ import (
 type cliCommand struct {
 	name        string
 	description string
-	callback    func(*pokeapi.Client) error
+	callback    func(*pokeapi.Client, ...string) error
 }
 
 func StartRepl() {
@@ -36,7 +36,7 @@ func StartRepl() {
 			continue
 		}
 
-		if err := supportedCommands[promptCommand].callback(pokeClient); err != nil {
+		if err := supportedCommands[promptCommand].callback(pokeClient, prompt[1:]...); err != nil {
 			fmt.Printf("Error executing command '%s': %v\n", promptCommand, err)
 			continue
 		}
@@ -50,13 +50,13 @@ func cleanInput(text string) []string {
 	return slicedString
 }
 
-func commandExit(cli *pokeapi.Client) error {
+func commandExit(cli *pokeapi.Client, args ...string) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(cli *pokeapi.Client) error {
+func commandHelp(cli *pokeapi.Client, args ...string) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Print("Usage:\n\n")
 	for _, data := range getCommands() {
@@ -65,7 +65,7 @@ func commandHelp(cli *pokeapi.Client) error {
 	return nil
 }
 
-func commandMap(cli *pokeapi.Client) error {
+func commandMap(cli *pokeapi.Client, args ...string) error {
 	locAreas, err := cli.GetLocationAreas("forward")
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func commandMap(cli *pokeapi.Client) error {
 	return nil
 }
 
-func commandMapb(cli *pokeapi.Client) error {
+func commandMapb(cli *pokeapi.Client, args ...string) error {
 	locAreas, err := cli.GetLocationAreas("back")
 	if err != nil {
 		return err
@@ -88,6 +88,33 @@ func commandMapb(cli *pokeapi.Client) error {
 	return nil
 }
 
+func commandExplore(cli *pokeapi.Client, args ...string) error {
+	if len(args) == 0 {
+		fmt.Println("Location name must be provided after command 'explore'")
+		return nil
+	}
+	pokemonFound, err := cli.GetPokemonInArea(args[0])
+	if err != nil {
+		return err
+	}
+	for _, pokemonName := range pokemonFound {
+		fmt.Println(pokemonName)
+	}
+	return nil
+}
+
+func commandCatch(cli *pokeapi.Client, args ...string) error {
+	if len(args) == 0 {
+		fmt.Println("A Pokemon name must be provided to attempt catching")
+		return nil
+	}
+	_, err := cli.CatchPokemon(args[0])
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func getCommands() map[string]cliCommand {
 	return map[string]cliCommand{
 		"help": {
@@ -95,10 +122,20 @@ func getCommands() map[string]cliCommand {
 			description: "Displays a help message",
 			callback:    commandHelp,
 		},
+		"catch": {
+			name:        "catch <pokemon_name>",
+			description: "Attepmts to catch a pokemon",
+			callback:    commandCatch,
+		},
 		"exit": {
 			name:        "exit",
 			description: "Exit the Pokedex",
 			callback:    commandExit,
+		},
+		"explore": {
+			name:        "explore <location_name>",
+			description: "Shows the pokemon in the indicated location",
+			callback:    commandExplore,
 		},
 		"map": {
 			name:        "map",
